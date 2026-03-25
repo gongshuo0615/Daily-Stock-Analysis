@@ -147,6 +147,17 @@ class YfinanceFetcher(BaseFetcher):
                 auto_adjust=True,  # 自动调整价格（复权）
             )
             
+            # =======================================================
+            # 👇 新增：处理 yfinance 多层表头和并发串台 Bug
+            import pandas as pd
+            if isinstance(df.columns, pd.MultiIndex):
+                if yf_code in df.columns.get_level_values(1):
+                    df = df.xs(yf_code, level=1, axis=1)
+                else:
+                    df.columns = df.columns.get_level_values(0)
+            # 👆 新增结束
+            # =======================================================
+            
             if df.empty:
                 raise DataFetchError(f"Yahoo Finance 未查询到 {stock_code} 的数据")
             
@@ -186,6 +197,13 @@ class YfinanceFetcher(BaseFetcher):
         
         # 计算涨跌幅（因为 yfinance 不直接提供）
         if 'close' in df.columns:
+            # =======================================================
+            # 👇 新增：强制降维，防止由于异常数据导致 close 为矩阵
+            import pandas as pd
+            if isinstance(df['close'], pd.DataFrame):
+                df['close'] = df['close'].squeeze(axis=1)
+            # 👆 新增结束
+            # =======================================================
             df['pct_chg'] = df['close'].pct_change() * 100
             df['pct_chg'] = df['pct_chg'].fillna(0).round(2)
         
