@@ -975,7 +975,7 @@ class GeminiAnalyzer:
 
 请输出完整的 JSON 格式决策仪表盘。"""
         
-        return prompt
+return prompt
     
     def _format_volume(self, volume: Optional[float]) -> str:
         """格式化成交量显示"""
@@ -998,7 +998,7 @@ class GeminiAnalyzer:
             return f"{amount / 1e4:.2f} 万美元"
         else:
             return f"{amount:.0f} 美元"
-    
+
     def _parse_response(
         self, 
         response_text: str, 
