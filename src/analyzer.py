@@ -1,13 +1,13 @@
 # -*- coding: utf-8 -*-
 """
 ===================================
-A股自选股智能分析系统 - AI分析层
+美股 ETF 智能分析系统 - AI分析层
 ===================================
 
 职责：
-1. 封装 Gemini API 调用逻辑
-2. 利用 Google Search Grounding 获取实时新闻
-3. 结合技术面和消息面生成分析报告
+1. 封装 Gemini / OpenAI 兼容 API 调用逻辑
+2. 利用外部搜索获取实时美股宏观新闻与财报预期
+3. 结合美股ETF技术面和消息面生成【决策仪表盘】
 """
 
 import json
@@ -68,7 +68,13 @@ STOCK_NAME_MAP = {
     'LI': '理想汽车',
     'COIN': 'Coinbase',
     'MSTR': 'MicroStrategy',
-
+    
+    # === 美股 ETF 补充 ===
+    'SPYM': '标普500 ETF',
+    'QQQM': '纳斯达克100 ETF',
+    'VTV': '价值股 ETF',
+    'SHY': '短期国债 ETF',
+    
     # === 港股 (5位数字) ===
     '00700': '腾讯控股',
     '03690': '美团',
@@ -246,39 +252,25 @@ class GeminiAnalyzer:
     # 核心模块：核心结论 + 数据透视 + 舆情情报 + 作战计划
     # ========================================
     
-    SYSTEM_PROMPT = """你是一位专注于趋势交易的 A 股投资分析师，负责生成专业的【决策仪表盘】分析报告。
+    SYSTEM_PROMPT = """你是一位专注于美股大类资产与ETF的资深趋势交易分析师，负责生成专业的【决策仪表盘】分析报告。
 
 ## 核心交易理念（必须严格遵守）
 
-### 1. 严进策略（不追高）
-- **绝对不追高**：当股价偏离 MA5 超过 5% 时，坚决不买入
+### 1. 拥抱长牛（顺势而为）
+- **多头排列必须条件**：MA5 > MA10 > MA20。美股宽基指数具有长牛特征，只要均线保持多头排列，应以持有和逢低加仓为主。
+- 坚决回避空头排列（MA5 < MA10 < MA20）的标的。
+
+### 2. 动量与乖离管理
 - **乖离率公式**：(现价 - MA5) / MA5 × 100%
-- 乖离率 < 2%：最佳买点区间
-- 乖离率 2-5%：可小仓介入
-- 乖离率 > 5%：严禁追高！直接判定为"观望"
+- 乖离率 < 3%：最佳买点区间，适合定投或加仓。
+- 乖离率 3-8%：强势运行区，持有为主，不建议大单追高，但绝对不可轻易看空。
+- 乖离率 > 8%：警惕短期技术性超买回调，可判定为"观望"或"停止加仓"。
 
-### 2. 趋势交易（顺势而为）
-- **多头排列必须条件**：MA5 > MA10 > MA20
-- 只做多头排列的股票，空头排列坚决不碰
-- 均线发散上行优于均线粘合
-- 趋势强度判断：看均线间距是否在扩大
-
-### 3. 效率优先（筹码结构）
-- 关注筹码集中度：90%集中度 < 15% 表示筹码集中
-- 获利比例分析：70-90% 获利盘时需警惕获利回吐
-- 平均成本与现价关系：现价高于平均成本 5-15% 为健康
-
-### 4. 买点偏好（回踩支撑）
-- **最佳买点**：缩量回踩 MA5 获得支撑
-- **次优买点**：回踩 MA10 获得支撑
-- **观望情况**：跌破 MA20 时观望
-
-### 5. 风险排查重点
-- 减持公告（股东、高管减持）
-- 业绩预亏/大幅下滑
-- 监管处罚/立案调查
-- 行业政策利空
-- 大额解禁
+### 3. 美股核心排查重点
+- 美联储货币政策预期（如FOMC决议、加息/降息概率变化）
+- 核心宏观数据发布（如CPI通胀、PCE、非农就业数据）
+- 权重股/科技巨头的财报预期（对SPY、QQQ影响极大）
+- VIX恐慌指数的异常飙升
 
 ## 输出格式：决策仪表盘 JSON
 
@@ -314,7 +306,7 @@ class GeminiAnalyzer:
                 "ma10": MA10数值,
                 "ma20": MA20数值,
                 "bias_ma5": 乖离率百分比数值,
-                "bias_status": "安全/警戒/危险",
+                "bias_status": "安全/强势/超买警戒",
                 "support_level": 支撑位价格,
                 "resistance_level": 压力位价格
             },
@@ -322,42 +314,31 @@ class GeminiAnalyzer:
                 "volume_ratio": 量比数值,
                 "volume_status": "放量/缩量/平量",
                 "turnover_rate": 换手率百分比,
-                "volume_meaning": "量能含义解读（如：缩量回调表示抛压减轻）"
-            },
-            "chip_structure": {
-                "profit_ratio": 获利比例,
-                "avg_cost": 平均成本,
-                "concentration": 筹码集中度,
-                "chip_health": "健康/一般/警惕"
+                "volume_meaning": "量能含义解读"
             }
         },
         
         "intelligence": {
-            "latest_news": "【最新消息】近期重要新闻摘要",
-            "risk_alerts": ["风险点1：具体描述", "风险点2：具体描述"],
-            "positive_catalysts": ["利好1：具体描述", "利好2：具体描述"],
-            "earnings_outlook": "业绩预期分析（基于年报预告、业绩快报等）",
-            "sentiment_summary": "舆情情绪一句话总结"
+            "latest_news": "【最新宏观与市场消息】近期重要新闻摘要",
+            "risk_alerts": ["风险点1：如宏观利空", "风险点2：均线破位风险"],
+            "positive_catalysts": ["利好1：如数据超预期", "利好2：降息预期等"],
+            "sentiment_summary": "市场情绪一句话总结"
         },
         
         "battle_plan": {
             "sniper_points": {
-                "ideal_buy": "理想买入点：XX元（在MA5附近）",
-                "secondary_buy": "次优买入点：XX元（在MA10附近）",
-                "stop_loss": "止损位：XX元（跌破MA20或X%）",
-                "take_profit": "目标位：XX元（前高/整数关口）"
+                "ideal_buy": "理想买入点：XX元（在MA10或MA5附近）",
+                "stop_loss": "防守位：XX元（跌破MA20）",
+                "take_profit": "目标位：XX元（前高或向上推演）"
             },
             "position_strategy": {
                 "suggested_position": "建议仓位：X成",
-                "entry_plan": "分批建仓策略描述",
-                "risk_control": "风控策略描述"
+                "entry_plan": "分批建仓策略描述"
             },
             "action_checklist": [
-                "✅/⚠️/❌ 检查项1：多头排列",
-                "✅/⚠️/❌ 检查项2：乖离率<5%",
-                "✅/⚠️/❌ 检查项3：量能配合",
-                "✅/⚠️/❌ 检查项4：无重大利空",
-                "✅/⚠️/❌ 检查项5：筹码健康"
+                "✅/⚠️/❌ 检查项1：均线多头排列",
+                "✅/⚠️/❌ 检查项2：乖离率<8%不过度超买",
+                "✅/⚠️/❌ 检查项3：宏观预期平稳或向好"
             ]
         }
     },
@@ -365,7 +346,7 @@ class GeminiAnalyzer:
     "analysis_summary": "100字综合分析摘要",
     "key_points": "3-5个核心看点，逗号分隔",
     "risk_warning": "风险提示",
-    "buy_reason": "操作理由，引用交易理念",
+    "buy_reason": "操作理由",
     
     "trend_analysis": "走势形态分析",
     "short_term_outlook": "短期1-3日展望",
@@ -380,37 +361,31 @@ class GeminiAnalyzer:
     "news_summary": "新闻摘要",
     "market_sentiment": "市场情绪",
     "hot_topics": "相关热点",
-    
-    "search_performed": true/false,
-    "data_sources": "数据来源说明"
+    "data_sources": "数据来源说明",
+
+    "search_performed": true,
+    "success": true
 }
 ```
 
 ## 评分标准
 
-### 强烈买入（80-100分）：
+### 买入/强烈买入（70-100分）：
 - ✅ 多头排列：MA5 > MA10 > MA20
-- ✅ 低乖离率：<2%，最佳买点
-- ✅ 缩量回调或放量突破
-- ✅ 筹码集中健康
-- ✅ 消息面有利好催化
+- ✅ 乖离率在安全或强势区间 (<8%)
+- ✅ 强势放量突破或温和缩量回踩
+- ✅ 宏观预期向好或核心财报超预期
 
-### 买入（60-79分）：
-- ✅ 多头排列或弱势多头
-- ✅ 乖离率 <5%
-- ✅ 量能正常
-- ⚪ 允许一项次要条件不满足
-
-### 观望（40-59分）：
-- ⚠️ 乖离率 >5%（追高风险）
-- ⚠️ 均线缠绕趋势不明
-- ⚠️ 有风险事件
+### 持有/观望（40-69分）：
+- ⚠️ 均线缠绕，趋势不明朗
+- ⚠️ 乖离率 >8%（短期极度超买，需防守）
+- ⚠️ 宏观数据即将发布，市场观望情绪浓厚
 
 ### 卖出/减仓（0-39分）：
-- ❌ 空头排列
-- ❌ 跌破MA20
-- ❌ 放量下跌
-- ❌ 重大利空
+- ❌ 明确的空头排列 (MA5 < MA10 < MA20)
+- ❌ 跌破关键支撑 MA20
+- ❌ 放量大跌，资金恐慌出逃
+- ❌ 宏观基本面出现重大恶化（如通胀失控、衰退确立）
 
 ## 决策仪表盘核心原则
 
@@ -418,7 +393,7 @@ class GeminiAnalyzer:
 2. **分持仓建议**：空仓者和持仓者给不同建议
 3. **精确狙击点**：必须给出具体价格，不说模糊的话
 4. **检查清单可视化**：用 ✅⚠️❌ 明确显示每项检查结果
-5. **风险优先级**：舆情中的风险点要醒目标出"""
+5. **宏观风险优先**：舆情中的美联储动态、通胀数据等宏观风险点必须醒目标出"""
 
     def __init__(self, api_key: Optional[str] = None):
         """
@@ -553,7 +528,7 @@ class GeminiAnalyzer:
             
         except Exception as e:
             logger.error(f"Gemini 模型初始化失败: {e}")
-            self._model = None
+            self._model = 无
     
     def _switch_to_fallback_model(self) -> bool:
         """
@@ -674,7 +649,7 @@ class GeminiAnalyzer:
                     logger.info(f"[Gemini] 第 {attempt + 1} 次重试，等待 {delay:.1f} 秒...")
                     time.sleep(delay)
                 
-                response = self._model.generate_content(
+                response = self._model。generate_content(
                     prompt,
                     generation_config=generation_config,
                     request_options={"timeout": 120}
@@ -760,13 +735,13 @@ class GeminiAnalyzer:
         
         # 优先从上下文获取股票名称（由 main.py 传入）
         name = context.get('stock_name')
-        if not name or name.startswith('股票'):
+        if not name or name.startswith('股票') or name.startswith('标的'):
             # 备选：从 realtime 中获取
             if 'realtime' in context and context['realtime'].get('name'):
                 name = context['realtime']['name']
             else:
-                # 最后从映射表获取
-                name = STOCK_NAME_MAP.get(code, f'股票{code}')
+                # 最后从映射表获取（彻底消灭“股票”前缀）
+                name = STOCK_NAME_MAP.get(code, f'标的{code}')
         
         # 如果模型不可用，返回默认结果
         if not self.is_available():
@@ -778,7 +753,7 @@ class GeminiAnalyzer:
                 operation_advice='持有',
                 confidence_level='低',
                 analysis_summary='AI 分析功能未启用（未配置 API Key）',
-                risk_warning='请配置 Gemini API Key 后重试',
+                risk_warning='请配置 Gemini API Key 后重试'，
                 success=False,
                 error_message='Gemini API Key 未配置',
             )
@@ -856,32 +831,25 @@ class GeminiAnalyzer:
         news_context: Optional[str] = None
     ) -> str:
         """
-        格式化分析提示词（决策仪表盘 v2.0）
-        
-        包含：技术指标、实时行情（量比/换手率）、筹码分布、趋势分析、新闻
-        
-        Args:
-            context: 技术面数据上下文（包含增强数据）
-            name: 股票名称（默认值，可能被上下文覆盖）
-            news_context: 预先搜索的新闻内容
+        格式化分析提示词（美股决策仪表盘版）
         """
         code = context.get('code', 'Unknown')
         
-        # 优先使用上下文中的股票名称（从 realtime_quote 获取）
+       # 【修改1：去除了强行加“股票”二字的 A股逻辑，改为“标的”】
         stock_name = context.get('stock_name', name)
-        if not stock_name or stock_name == f'股票{code}':
-            stock_name = STOCK_NAME_MAP.get(code, f'股票{code}')
+        if not stock_name or stock_name.startswith('股票') or stock_name == f'股票{code}':
+            stock_name = STOCK_NAME_MAP.get(code, f'标的{code}')
             
         today = context.get('today', {})
         
         # ========== 构建决策仪表盘格式的输入 ==========
         prompt = f"""# 决策仪表盘分析请求
 
-## 📊 股票基础信息
+## 📊 标的基础信息
 | 项目 | 数据 |
 |------|------|
-| 股票代码 | **{code}** |
-| 股票名称 | **{stock_name}** |
+| 标的代码 | **{code}** |
+| 标的名称 | **{stock_name}** |
 | 分析日期 | {context.get('date', '未知')} |
 
 ---
@@ -891,10 +859,10 @@ class GeminiAnalyzer:
 ### 今日行情
 | 指标 | 数值 |
 |------|------|
-| 收盘价 | {today.get('close', 'N/A')} 元 |
-| 开盘价 | {today.get('open', 'N/A')} 元 |
-| 最高价 | {today.get('high', 'N/A')} 元 |
-| 最低价 | {today.get('low', 'N/A')} 元 |
+| 收盘价 | {today.get('close', 'N/A')} 美元 |
+| 开盘价 | {today.get('open', 'N/A')} 美元 |
+| 最高价 | {today.get('high', 'N/A')} 美元 |
+| 最低价 | {today.get('low', 'N/A')} 美元 |
 | 涨跌幅 | {today.get('pct_chg', 'N/A')}% |
 | 成交量 | {self._format_volume(today.get('volume'))} |
 | 成交额 | {self._format_amount(today.get('amount'))} |
@@ -915,7 +883,7 @@ class GeminiAnalyzer:
 ### 实时行情增强数据
 | 指标 | 数值 | 解读 |
 |------|------|------|
-| 当前价格 | {rt.get('price', 'N/A')} 元 | |
+| 当前价格 | {rt.get('price', 'N/A')} 美元 | |
 | **量比** | **{rt.get('volume_ratio', 'N/A')}** | {rt.get('volume_ratio_desc', '')} |
 | **换手率** | **{rt.get('turnover_rate', 'N/A')}%** | |
 | 市盈率(动态) | {rt.get('pe_ratio', 'N/A')} | |
@@ -925,27 +893,15 @@ class GeminiAnalyzer:
 | 60日涨跌幅 | {rt.get('change_60d', 'N/A')}% | 中期表现 |
 """
         
-        # 添加筹码分布数据
-        if 'chip' in context:
-            chip = context['chip']
-            profit_ratio = chip.get('profit_ratio', 0)
-            prompt += f"""
-### 筹码分布数据（效率指标）
-| 指标 | 数值 | 健康标准 |
-|------|------|----------|
-| **获利比例** | **{profit_ratio:.1%}** | 70-90%时警惕 |
-| 平均成本 | {chip.get('avg_cost', 'N/A')} 元 | 现价应高于5-15% |
-| 90%筹码集中度 | {chip.get('concentration_90', 0):.2%} | <15%为集中 |
-| 70%筹码集中度 | {chip.get('concentration_70', 0):.2%} | |
-| 筹码状态 | {chip.get('chip_status', '未知')} | |
-"""
+# （已移除不适用于美股 ETF 的“筹码分布数据”逻辑）
         
-        # 添加趋势分析结果（基于交易理念的预判）
+        # 添加趋势分析结果（基于美股长牛交易理念）
         if 'trend_analysis' in context:
             trend = context['trend_analysis']
-            bias_warning = "🚨 超过5%，严禁追高！" if trend.get('bias_ma5', 0) > 5 else "✅ 安全范围"
+            # 【修改点1】：将 Python 层面硬编码的 5% 阈值改为 8%，并修改硬编码的警告词
+            bias_warning = "🚨 超过8%，短期极度超买！" if trend.get('bias_ma5', 0) > 8 else "✅ 安全/强势范围"
             prompt += f"""
-### 趋势分析预判（基于交易理念）
+### 趋势分析预判（基于美股交易理念）
 | 指标 | 数值 | 判定 |
 |------|------|------|
 | 趋势状态 | {trend.get('trend_status', '未知')} | |
@@ -981,22 +937,23 @@ class GeminiAnalyzer:
 ## 📰 舆情情报
 """
         if news_context:
+            # 【修改点2】：将搜索侧重点从 A股的“减持/处罚” 改为 美股的“宏观数据/降息/财报”
             prompt += f"""
 以下是 **{stock_name}({code})** 近7日的新闻搜索结果，请重点提取：
-1. 🚨 **风险警报**：减持、处罚、利空
-2. 🎯 **利好催化**：业绩、合同、政策
-3. 📊 **业绩预期**：年报预告、业绩快报
-
+1. 🚨 **宏观与系统性风险**：美联储政策收紧、通胀数据超预期、经济衰退担忧等
+2. 🎯 **利好催化**：降息预期升温、宏观经济数据向好、核心权重股财报超预期
+3. 📊 **业绩与预期**：成分股财报季表现、华尔街投行评级调整
 ```
 {news_context}
 ```
 """
         else:
             prompt += """
-未搜索到该股票近期的相关新闻。请主要依据技术面数据进行分析。
+未搜索到该标的近期的相关宏观或市场新闻。请主要依据技术面数据进行分析。
 """
         
         # 明确的输出要求
+        # 【修改点3】：重写必须明确回答的重点关注问题，彻底对齐美股逻辑
         prompt += f"""
 ---
 
@@ -1006,16 +963,15 @@ class GeminiAnalyzer:
 
 ### 重点关注（必须明确回答）：
 1. ❓ 是否满足 MA5>MA10>MA20 多头排列？
-2. ❓ 当前乖离率是否在安全范围内（<5%）？—— 超过5%必须标注"严禁追高"
-3. ❓ 量能是否配合（缩量回调/放量突破）？
-4. ❓ 筹码结构是否健康？
-5. ❓ 消息面有无重大利空？（减持、处罚、业绩变脸等）
+2. ❓ 当前乖离率是否在安全范围内（<8%）？—— 超过8%必须标注"短期超买风险"
+3. ❓ 量能是否配合（强势放量突破 或 温和缩量回踩）？
+4. ❓ 宏观消息面或核心权重股有无重大风险/利好？（美联储动作、核心经济数据、财报预期等）
 
 ### 决策仪表盘要求：
 - **核心结论**：一句话说清该买/该卖/该等
 - **持仓分类建议**：空仓者怎么做 vs 持仓者怎么做
 - **具体狙击点位**：买入价、止损价、目标价（精确到分）
-- **检查清单**：每项用 ✅/⚠️/❌ 标记
+- **检查清单**：每项用 ✅/⚠️/❌ 标记（检查项必须符合美股长牛趋势逻辑）
 
 请输出完整的 JSON 格式决策仪表盘。"""
         
@@ -1032,16 +988,16 @@ class GeminiAnalyzer:
         else:
             return f"{volume:.0f} 股"
     
-    def _format_amount(self, amount: Optional[float]) -> str:
-        """格式化成交额显示"""
+     def _format_amount(self, amount: Optional[float]) -> str:
+        """格式化成交额显示（已适配美元）"""
         if amount is None:
             return 'N/A'
         if amount >= 1e8:
-            return f"{amount / 1e8:.2f} 亿元"
+            return f"{amount / 1e8:.2f} 亿美元"
         elif amount >= 1e4:
-            return f"{amount / 1e4:.2f} 万元"
+            return f"{amount / 1e4:.2f} 万美元"
         else:
-            return f"{amount:.0f} 元"
+            return f"{amount:.0f} 美元"
     
     def _parse_response(
         self, 
