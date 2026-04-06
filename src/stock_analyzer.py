@@ -394,7 +394,7 @@ class StockTrendAnalyzer:
         
         乖离率 = (现价 - 均线) / 均线 * 100%
         
-        严进策略：乖离率超过 5% 不追高
+        美股 ETF 策略：容忍跳空，乖离率超过 8% 视为短期极度超买
         """
         price = result.current_price
         
@@ -428,17 +428,18 @@ class StockTrendAnalyzer:
         if result.volume_ratio_5d >= self.VOLUME_HEAVY_RATIO:
             if price_change > 0:
                 result.volume_status = VolumeStatus.HEAVY_VOLUME_UP
-                result.volume_trend = "放量上涨，多头力量强劲"
+                result.volume_trend = "放量上涨/突破，买盘动能强劲"
             else:
                 result.volume_status = VolumeStatus.HEAVY_VOLUME_DOWN
-                result.volume_trend = "放量下跌，注意风险"
+                result.volume_trend = "放量下跌，恐慌抛压涌出，注意风险"
         elif result.volume_ratio_5d <= self.VOLUME_SHRINK_RATIO:
             if price_change > 0:
                 result.volume_status = VolumeStatus.SHRINK_VOLUME_UP
-                result.volume_trend = "缩量上涨，上攻动能不足"
+                result.volume_trend = "缩量上涨，上攻动能减弱"
             else:
                 result.volume_status = VolumeStatus.SHRINK_VOLUME_DOWN
-                result.volume_trend = "缩量回调，洗盘特征明显（好）"
+                # 【彻底修改】：去除了原A股的“主力洗盘”话术，改为美股客观逻辑
+                result.volume_trend = "缩量回调，抛压较轻（良性回踩）"
         else:
             result.volume_status = VolumeStatus.NORMAL
             result.volume_trend = "量能正常"
