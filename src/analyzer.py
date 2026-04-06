@@ -988,7 +988,7 @@ class GeminiAnalyzer:
         else:
             return f"{volume:.0f} 股"
     
-     def _format_amount(self, amount: Optional[float]) -> str:
+    def _format_amount(self, amount: Optional[float]) -> str:
         """格式化成交额显示（已适配美元）"""
         if amount is None:
             return 'N/A'
