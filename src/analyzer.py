@@ -649,7 +649,7 @@ class GeminiAnalyzer:
                     logger.info(f"[Gemini] 第 {attempt + 1} 次重试，等待 {delay:.1f} 秒...")
                     time.sleep(delay)
                 
-                response = self._model。generate_content(
+                response = self._model.generate_content(
                     prompt,
                     generation_config=generation_config,
                     request_options={"timeout": 120}
