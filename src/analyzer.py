@@ -528,7 +528,7 @@ class GeminiAnalyzer:
             
         except Exception as e:
             logger.error(f"Gemini 模型初始化失败: {e}")
-            self._model = 无
+            self._model = None
     
     def _switch_to_fallback_model(self) -> bool:
         """
@@ -975,7 +975,7 @@ class GeminiAnalyzer:
 
 请输出完整的 JSON 格式决策仪表盘。"""
         
-return prompt
+        return prompt
     
     def _format_volume(self, volume: Optional[float]) -> str:
         """格式化成交量显示"""
