@@ -753,7 +753,7 @@ class GeminiAnalyzer:
                 operation_advice='持有',
                 confidence_level='低',
                 analysis_summary='AI 分析功能未启用（未配置 API Key）',
-                risk_warning='请配置 Gemini API Key 后重试'，
+                risk_warning='请配置 Gemini API Key 后重试',
                 success=False,
                 error_message='Gemini API Key 未配置',
             )
